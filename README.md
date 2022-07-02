@@ -1,10 +1,12 @@
 # Project_GameDev_Pacman
 
-Uni Project - Recreate pacman using p5.js.
+Uni Project - Software Engineering game development
 
 # About the Pacman Project
 
-This project is one of my uni project where I have to recreate pacman using p5.js.
+The project is the implementation of a computer game using software engineering principles and patterns.
+
+You can find the full details of the [documentation here](www/documentation/Milestone2_Ebeckett_s5125717.pdf)
 
 # How to run the project
 
@@ -18,4 +20,4 @@ This project is one of my uni project where I have to recreate pacman using p5.j
 - after installing the node_modules. On terminal, run:
   <code>node server.js</code>
 
-then open localhost http://localhost:3000/ on your browser.
+then open localhost <http://localhost:3000/> on your browser.
