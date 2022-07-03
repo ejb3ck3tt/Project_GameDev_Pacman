@@ -8,6 +8,8 @@ The project is the implementation of a computer game using software engineering 
 
 You can find the full details of the [documentation here](www/documentation/Milestone2_Ebeckett_s5125717.pdf)
 
+You can try and play the game by [clicking here](https://editor.p5js.org/ethelbeckett/full/p4yGE2uS2)
+
 # How to run the project
 
 - install "Live server" extension in VS code
