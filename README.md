@@ -23,3 +23,7 @@ Play the pac-man game.[click me](https://editor.p5js.org/ethelbeckett/full/p4yGE
   <code>node server.js</code>
 
 then open localhost <http://localhost:3000/> on your browser.
+
+
+## LICENSE
+[MIT](https://github.com/MichaIng/nodejs-linux-installer/blob/master/LICENSE)
