@@ -10,15 +10,38 @@ This project is a functional browser game prototype with a clear gameplay goal a
 
 However, the current implementation is not actually MVC in a strong architectural sense. Most game state is stored in globals, rendering and gameplay rules are tightly coupled, and several behaviors depend on side effects inside the main draw cycle. The game works best as a small single-level prototype; it would become difficult to maintain, test, or extend into a larger game without restructuring.
 
+## Implementation Status Update
+
+The findings below were written as an initial review snapshot. Since then, several runtime issues have been fixed in the codebase.
+
+### Fixed Since Review
+
+- Ghost respawn now preserves the eaten ghost reference before removal, avoiding invalid array access.
+- Game-over flow now uses an explicit end-game screen instead of continuing to mutate state in normal gameplay.
+- High scores now save once per game-over flow and are persisted locally with browser storage.
+- The end-game button flow has been corrected and the game-over screen now includes a route back to the main menu.
+- High-score and game-over screen UI have been improved for readability.
+- Audio handling has been partially improved so the Pac-Man intro theme plays on entering the play state instead of behaving like generic looping menu audio.
+
+### Still Open
+
+- Map/grid structure inconsistency
+- Heavy global state coupling
+- MVC boundary mixing
+- Recursive ghost movement
+- Duplicate score-rendering ownership
+- Naming consistency issues
+- Performance concerns around repeated per-frame scans and frame-rate control inside entity loops
+
 ## Review Findings
 
 ### High Severity
 
-1. Ghost respawn logic can use an invalid or wrong ghost reference after removal.
+1. Ghost respawn logic can use an invalid or wrong ghost reference after removal. `Status: Fixed`
 
 Location:
-- `www/sketch.js:301`
-- `www/sketch.js:303`
+- `www/sketch.js:435`
+- `www/sketch.js:443`
 
 Issue:
 - The code removes `ghosts[i]` with `ghosts.splice(i,1)` and then immediately reads `ghosts[i].img` to recreate the ghost.
@@ -32,13 +55,13 @@ Recommendation:
 - Store the ghost instance or its image before `splice`.
 - Prefer `const eatenGhost = ghosts[i];` before removal, then respawn using `eatenGhost.img`.
 
-2. Game-over handling continues mutating state inside the render loop.
+2. Game-over handling continues mutating state inside the render loop. `Status: Fixed`
 
 Location:
-- `www/sketch.js:313`
-- `www/sketch.js:315`
-- `www/sketch.js:347`
-- `www/sketch.js:355`
+- `www/sketch.js:453`
+- `www/sketch.js:460`
+- `www/sketch.js:490`
+- `www/sketch.js:511`
 
 Issue:
 - When lives reach zero, `saveScore()` is called from the gameplay loop, but the loop is not stopped.
@@ -54,12 +77,13 @@ Recommendation:
 - Stop gameplay updates once the game is over.
 - Run score persistence exactly once, not on every frame.
 
-3. Background music is started and paused every frame.
+3. Background music is started and paused every frame. `Status: Partially Fixed`
 
 Location:
-- `www/sketch.js:172`
-- `www/sketch.js:176`
-- `www/sketch.js:180`
+- `www/sketch.js:122`
+- `www/sketch.js:223`
+- `www/sketch.js:276`
+- `www/sketch.js:309`
 
 Issue:
 - `begSound.play()` is called on every draw cycle, and the code then alternates between `play()` and `pause()` depending on current state.
@@ -72,6 +96,9 @@ Recommendation:
 - Move menu/game music transitions into state-entry handlers.
 - Only call `play()`, `pause()`, or `stop()` when the state changes.
 
+Current note:
+- The implementation now restores the Pac-Man intro theme on entering `PLAY` and pauses gameplay until the theme finishes, but the broader audio model is still centralized in `sketch.js` rather than a dedicated audio/state system.
+
 ### Medium Severity
 
 4. The map definition is structurally inconsistent with the declared grid dimensions.
@@ -80,7 +107,7 @@ Location:
 - `www/field.js:4`
 - `www/field.js:5`
 - `www/field.js:31`
-- `www/sketch.js:134`
+- `www/sketch.js:152`
 
 Issue:
 - `rows` is declared as `25` and `column` as `30`, but the last row only contains 8 cells.
@@ -97,9 +124,9 @@ Recommendation:
 5. Architecture is heavily global and tightly coupled.
 
 Location:
-- `www/sketch.js:8`
-- `www/sketch.js:41`
-- `www/sketch.js:74`
+- `www/sketch.js:6`
+- `www/sketch.js:47`
+- `www/sketch.js:80`
 - `www/control.js:4`
 
 Issue:
@@ -118,7 +145,7 @@ Recommendation:
 6. The project claims MVC style, but rendering and model logic are mixed together.
 
 Location:
-- `www/sketch.js:221`
+- `www/sketch.js:276`
 - `www/field.js:42`
 - `www/pacman.js:12`
 - `www/ghost.js:14`
@@ -137,11 +164,11 @@ Recommendation:
   - View/Renderer: drawing entities and UI
   - Controller/Input: keyboard and menu actions
 
-7. The end-game button handler is misused.
+7. The end-game button handler is misused. `Status: Fixed`
 
 Location:
-- `www/sketch.js:127`
-- `www/sketch.js:128`
+- `www/sketch.js:145`
+- `www/sketch.js:146`
 
 Issue:
 - `playButton4.mouseClicked(window.location.reload());` calls `reload()` immediately and passes its return value instead of a callback.
@@ -172,7 +199,7 @@ Recommendation:
 9. Duplicate or conflicting definitions reduce clarity.
 
 Location:
-- `www/sketch.js:204`
+- `www/sketch.js:325`
 - `www/field.js:88`
 
 Issue:
@@ -354,7 +381,7 @@ The current project is missing several components that would be expected in a pr
 
 ### Gameplay and domain
 
-- Persistent high score storage
+- Persistent high score storage `Status: Fixed via local browser storage`
 - Level progression system
 - Pause/resume system
 - Restart without full page reload
@@ -419,7 +446,7 @@ Recommendation:
 
 Location:
 - `www/sketch.js:19`
-- `www/sketch.js:347`
+- `www/sketch.js:490`
 
 Observation:
 - Scores live entirely in browser memory and are trivially editable.
@@ -435,12 +462,12 @@ Recommendation:
 ### 1. Repeated full-array scans every frame
 
 Location:
-- `www/sketch.js:224`
-- `www/sketch.js:247`
-- `www/sketch.js:263`
-- `www/sketch.js:272`
-- `www/sketch.js:286`
-- `www/sketch.js:296`
+- `www/sketch.js:368`
+- `www/sketch.js:385`
+- `www/sketch.js:402`
+- `www/sketch.js:411`
+- `www/sketch.js:424`
+- `www/sketch.js:432`
 
 Issue:
 - The game iterates through tiles, pellets, energizers, ghosts, fruits, lives, and levels in separate loops every frame.
@@ -455,7 +482,7 @@ Recommendation:
 ### 2. `frameRate(8)` is called inside the ghost loop
 
 Location:
-- `www/sketch.js:287`
+- `www/sketch.js:426`
 
 Issue:
 - Frame rate should not be set repeatedly inside entity iteration.
@@ -470,8 +497,8 @@ Recommendation:
 ### 3. Audio state checks happen continuously in `draw()`
 
 Location:
-- `www/sketch.js:172`
-- `www/sketch.js:176`
+- `www/sketch.js:223`
+- `www/sketch.js:278`
 
 Impact:
 - Unnecessary work each frame and unstable audio behavior.
