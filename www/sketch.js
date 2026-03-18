@@ -296,11 +296,12 @@ function setup() {
     for(var i=0; i < ghosts.length; i++) {  
         if(pacman.colission(ghosts[i])) {
             if(ghosts[i].isScared === true) {
-                ghosts[i].isScared = false;
+                var eatenGhost = ghosts[i];
+                eatenGhost.isScared = false;
                 eatGhostSound.play();
                 ghosts.splice(i,1);
                 score = score + 200;
-                ghosts.push(new Ghost(32*12,32*10, ghosts[i].img));
+                ghosts.push(new Ghost(32*12,32*10, eatenGhost.img));
             }
         for(var j=0; j < lives.length; j++) {
             if(pacman.colission(ghosts[i])) {
