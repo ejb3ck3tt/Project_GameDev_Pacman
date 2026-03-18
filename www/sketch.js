@@ -3,6 +3,8 @@ const MAIN_MENU = 0;
 const PLAY = 1;
 const HIGH_SCORE = 2;
 const END_GAME = 3;
+const HIGH_SCORE_STORAGE_KEY = "pacmanHighScores";
+const DEFAULT_HIGH_SCORES = [2800, 2000, 800, 200];
 
 /**variables for object images */
 var tileImg, peletteImg, energyImg, pacmanImg,livesImg;
@@ -16,8 +18,10 @@ var blinky,pinky,inky,clyde;
 /**variables for scores starts at 0 */
 var score = 0;
 // let newHighScore = [1200,3200,4000,5600];
-let newHighScore = [200,800,2000,2800];
+let newHighScore = DEFAULT_HIGH_SCORES.slice();
 var highScore = 0;
+var gameOverMessage = "";
+var gameOverSaved = false;
 /**New Arrays to use for constructor */
 var tiles =[];
 var pelettes =[];
@@ -75,7 +79,7 @@ function setup() {
     createCanvas(960, 820);
 
     slider = createSlider(0,1,0.1,0.01);
-    begSound.play();
+    loadHighScores();
     begSound.setVolume(0.2);
     
     tile = new Tile(200,300);
@@ -102,7 +106,12 @@ function setup() {
  
     //functions used to show and hide buttons as per the screen events
     function playMenuButton() {
+        if(currentScreen === END_GAME) {
+            window.location.reload();
+            return;
+        }
         currentScreen = MAIN_MENU;
+        playButton1.position(400, height/2 - playButton1.size(100, 40).width);
         playButton1.show();
         playButton2.show();
         playButton3.show();
@@ -110,6 +119,8 @@ function setup() {
     }
     function playButtonGame(){
         currentScreen = PLAY;
+        gameOverMessage = "";
+        gameOverSaved = false;
         playButton1.hide();
         playButton2.hide();
         playButton3.hide();
@@ -125,7 +136,7 @@ function setup() {
         playButton4.hide();
     }
     function endGame() {
-        playButton4.mouseClicked(window.location.reload());
+        window.location.reload();
     }
 
 
@@ -163,24 +174,66 @@ function setup() {
             if(field.theField[i][j] === 'v')
                 levels.push(new Level(j * 32,i * 32))              
         }  
-    } 
+	    } 
+	}
+
+function loadHighScores() {
+    try {
+        var savedHighScores = localStorage.getItem(HIGH_SCORE_STORAGE_KEY);
+        if(savedHighScores === null) {
+            newHighScore = DEFAULT_HIGH_SCORES.slice();
+            saveHighScores();
+            return;
+        }
+        var parsedScores = JSON.parse(savedHighScores);
+        if(Array.isArray(parsedScores) && parsedScores.length > 0) {
+            newHighScore = parsedScores.slice().sort(function(a, b) {
+                return b - a;
+            }).slice(0, 4);
+        }
+        else {
+            newHighScore = DEFAULT_HIGH_SCORES.slice();
+        }
+    }
+    catch(error) {
+        newHighScore = DEFAULT_HIGH_SCORES.slice();
+    }
+}
+
+function saveHighScores() {
+    try {
+        localStorage.setItem(HIGH_SCORE_STORAGE_KEY, JSON.stringify(newHighScore));
+    }
+    catch(error) {
+    }
+}
+
+function updateBackgroundAudio() {
+    if(!begSound) {
+        return;
+    }
+    begSound.setVolume(slider.value());
+    try {
+        if(currentScreen === PLAY) {
+            if(begSound.isPlaying() === true) {
+                begSound.stop();
+            }
+            return;
+        }
+        if(begSound.isPlaying() === false) {
+            begSound.play();
+        }
+    }
+    catch(error) {
+    }
 }
 
 
-    function draw() {
-        background(0);
-        begSound.play();
-        begSound.setVolume(slider.value())
-
-
-        if(begSound.isPlaying()== false) {
-            begSound.play();
-        }else{
-            (begSound.isPlaying() == true)
-            begSound.pause();
-        }
-        
-        switch(currentScreen) {
+	    function draw() {
+	        background(0);
+	        updateBackgroundAudio();
+	        
+	        switch(currentScreen) {
             case MAIN_MENU:
                 drawMainMenuScreen();
                 break;
@@ -189,6 +242,9 @@ function setup() {
                 break;
             case HIGH_SCORE:
                 drawHighScore();
+                break;
+            case END_GAME:
+                drawEndGameScreen();
                 break;
      
         }
@@ -201,21 +257,32 @@ function setup() {
             
         }
 
-        function drawHighScore() {
-            for(var i=0; i < newHighScore.length; i++) {
-                fill(255);
-                textSize(36);
-                fill(192, 20, 10);
-                text("HIGHEST SCORE OF ALL TIME", 220, 200)
-                textSize(26);
-                fill(255);
-                text("NEW HIGH SCORE: " +" " + newHighScore[3],320,250)
-                text("NEW HIGH SCORE: " +" " + newHighScore[2], 320,300)
-                text("NEW HIGH SCORE: " +" " + newHighScore[1], 320,350)
-                text("NEW HIGH SCORE: " +" " + newHighScore[0], 320,400)
-            }
-        }
-    }
+	        function drawHighScore() {
+	            fill(192, 20, 10);
+	            textSize(36);
+	            text("HIGHEST SCORES", 300, 200);
+	            textSize(26);
+	            fill(255);
+	            for(var i=0; i < newHighScore.length; i++) {
+	                text((i + 1) + ". " + newHighScore[i], 360, 260 + i * 55);
+	            }
+	        }
+
+	        function drawEndGameScreen() {
+	            background(128);
+	            fill(0);
+	            textAlign(CENTER, CENTER);
+	            textSize(84);
+	            text("G A M E   O V E R", width/2, 240);
+	            textSize(38);
+	            text("Final Score: " + score, width/2, 390);
+	            if(gameOverMessage !== "") {
+	                textSize(34);
+	                text(gameOverMessage, width/2, 470);
+	            }
+	            textAlign(LEFT, BASELINE);
+	        }
+	    }
 
 
     function drawPlayScreen() {
@@ -312,11 +379,14 @@ function setup() {
                     ghosts[k].ghostRespawn();
                 }
                 if(lives.length < 1) {
-                    // noLoop();
+                    currentScreen = END_GAME;
+                    playButton1.show();
+                    playButton1.position(400, height - 70);
+                    playButton2.hide();
+                    playButton3.hide();
+                    playButton4.hide();
                     saveScore();
-                   
-                    // background(128);
-                    // window.location.reload();
+                    return;
                 }
             }
         }        
@@ -346,28 +416,27 @@ function setup() {
 
 
     function saveScore() {
-        frameRate(.1);
-        background(128);
-        textSize(100);
-        text("G A M E   O V E R", 80, 350);
-        // text("New HighScore: " + score, 180,height/2);
-        for(i=0; i < newHighScore.length; i++) {
-            if(score > newHighScore[i]) {
-                append(newHighScore, score);
-                fill(0);
-                textSize(50);
-                text("New HighScore: " + newHighScore[4], 300,height/2 +20);
-                textSize(20);
-                reset();
-            }
-            else {
-                textSize(100);
-                text("G A M E   O V E R", 80, 350);
-                textSize(20);
-                reset();
-            }
+        if(gameOverSaved === true) {
+            return;
         }
-           
+        gameOverSaved = true;
+        var previousLowestHighScore = newHighScore[newHighScore.length - 1];
+        var isNewHighScore = score > previousLowestHighScore;
+        newHighScore.push(score);
+        newHighScore.sort(function(a, b) {
+            return b - a;
+        });
+        if(newHighScore.length > 4) {
+            newHighScore.splice(4, newHighScore.length - 4);
+        }
+        saveHighScores();
+        if(isNewHighScore) {
+            gameOverMessage = "New HighScore: " + score;
+        }
+        else {
+            gameOverMessage = "No new high score";
+        }
+        reset();
     }
 
     function reset() {
