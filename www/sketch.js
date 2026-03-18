@@ -22,6 +22,8 @@ let newHighScore = DEFAULT_HIGH_SCORES.slice();
 var highScore = 0;
 var gameOverMessage = "";
 var gameOverSaved = false;
+var lastAudioScreen = null;
+var playIntroActive = false;
 /**New Arrays to use for constructor */
 var tiles =[];
 var pelettes =[];
@@ -121,6 +123,11 @@ function setup() {
         currentScreen = PLAY;
         gameOverMessage = "";
         gameOverSaved = false;
+        reset();
+        playIntroActive = true;
+        begSound.setVolume(slider.value());
+        begSound.play();
+        lastAudioScreen = PLAY;
         playButton1.hide();
         playButton2.hide();
         playButton3.hide();
@@ -217,32 +224,69 @@ function updateBackgroundAudio() {
     if(!begSound) {
         return;
     }
-    begSound.setVolume(slider.value());
+    if(playIntroActive === true) {
+        begSound.setVolume(slider.value());
+        return;
+    }
     try {
-        if(currentScreen === PLAY) {
-            if(begSound.isPlaying() === true) {
-                begSound.stop();
-            }
+        if(currentScreen === lastAudioScreen) {
             return;
         }
-        if(begSound.isPlaying() === false) {
-            begSound.play();
+        lastAudioScreen = currentScreen;
+        if(begSound.isPlaying() === true) {
+            begSound.stop();
         }
     }
     catch(error) {
     }
 }
 
+function syncButtonsForScreen() {
+    if(currentScreen === PLAY) {
+        playButton1.hide();
+        playButton2.hide();
+        playButton3.hide();
+        playButton4.show();
+        return;
+    }
+    if(currentScreen === HIGH_SCORE) {
+        playButton1.show();
+        playButton1.position(width/2 - 55, height - 85);
+        playButton2.hide();
+        playButton3.hide();
+        playButton4.hide();
+        return;
+    }
+    if(currentScreen === END_GAME) {
+        playButton1.show();
+        playButton1.position(400, height - 70);
+        playButton2.hide();
+        playButton3.hide();
+        playButton4.hide();
+        return;
+    }
+    playButton1.show();
+    playButton1.position(400, height/2 - playButton1.size(100, 40).width);
+    playButton2.show();
+    playButton3.show();
+    playButton4.hide();
+}
+
 
 	    function draw() {
 	        background(0);
 	        updateBackgroundAudio();
+	        syncButtonsForScreen();
 	        
 	        switch(currentScreen) {
             case MAIN_MENU:
                 drawMainMenuScreen();
                 break;
             case PLAY:
+                if(playIntroActive === true) {
+                    drawPlayIntroScreen();
+                    break;
+                }
                 drawPlayScreen();
                 break;
             case HIGH_SCORE:
@@ -260,6 +304,22 @@ function updateBackgroundAudio() {
             text("Ethel Beckett | s5125717", 325, 500);
             text("Click play and Use ARROW KEYS to play the game", 210, 550);
             
+        }
+
+        function drawPlayIntroScreen() {
+            if(begSound.isPlaying() === false) {
+                playIntroActive = false;
+                return;
+            }
+            background(0);
+            fill(255, 255, 0);
+            textAlign(CENTER, CENTER);
+            textSize(52);
+            text("READY!", width/2, height/2 - 20);
+            textSize(24);
+            fill(255);
+            text("Pac-Man theme is playing...", width/2, height/2 + 40);
+            textAlign(LEFT, BASELINE);
         }
 
 	        function drawHighScore() {
@@ -455,6 +515,8 @@ function updateBackgroundAudio() {
         begSound.stop();
         chompSound.stop();
         deathSound.stop();
+        lastAudioScreen = null;
+        playIntroActive = false;
     }
 
 }
