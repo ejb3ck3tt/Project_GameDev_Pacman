@@ -6,7 +6,11 @@ Uni Project - Software Engineering game development
 
 The project is the implementation of a computer game using software engineering principles and patterns.
 
-You can find the full details of the [documentation here](www/documentation/Milestone2_Ebeckett_s5125717.pdf)
+Documentation:
+
+- [Project overview](www/documentation/project-overview.md)
+- [Technical review](www/documentation/technical-review-2026-03-18.md)
+- [Original project documentation](www/documentation/Milestone2_Ebeckett_s5125717.pdf)
 
 Play the pac-man game.[click me](https://editor.p5js.org/ethelbeckett/full/p4yGE2uS2)
 
