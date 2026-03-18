@@ -4,7 +4,7 @@ const PLAY = 1;
 const HIGH_SCORE = 2;
 const END_GAME = 3;
 const HIGH_SCORE_STORAGE_KEY = "pacmanHighScores";
-const DEFAULT_HIGH_SCORES = [2800, 2000, 800, 200];
+const DEFAULT_HIGH_SCORES = [0, 0, 0, 0];
 
 /**variables for object images */
 var tileImg, peletteImg, energyImg, pacmanImg,livesImg;
@@ -130,7 +130,7 @@ function setup() {
     function playpHighScore() {
         currentScreen = HIGH_SCORE;
         playButton1.show();
-        playButton1.position(400, height/2 + 400 - playButton1.size(100, 40).width);
+        playButton1.position(width/2 - 55, height - 85);
         playButton2.hide();
         playButton3.hide();
         playButton4.hide();
@@ -187,9 +187,14 @@ function loadHighScores() {
         }
         var parsedScores = JSON.parse(savedHighScores);
         if(Array.isArray(parsedScores) && parsedScores.length > 0) {
-            newHighScore = parsedScores.slice().sort(function(a, b) {
+            newHighScore = parsedScores.filter(function(value) {
+                return typeof value === "number" && isFinite(value);
+            }).sort(function(a, b) {
                 return b - a;
             }).slice(0, 4);
+            while(newHighScore.length < 4) {
+                newHighScore.push(0);
+            }
         }
         else {
             newHighScore = DEFAULT_HIGH_SCORES.slice();
@@ -258,14 +263,26 @@ function updateBackgroundAudio() {
         }
 
 	        function drawHighScore() {
-	            fill(192, 20, 10);
-	            textSize(36);
-	            text("HIGHEST SCORES", 300, 200);
-	            textSize(26);
-	            fill(255);
+	            background(15, 15, 35);
+	            noStroke();
+	            fill(30, 30, 60);
+	            rect(220, 130, 520, 420, 20);
+	            fill(255, 210, 60);
+	            textAlign(CENTER, CENTER);
+	            textSize(42);
+	            text("HIGH SCORES", width/2, 185);
+	            fill(180, 180, 220);
+	            textSize(18);
+	            text("Top 4 Pac-Man runs", width/2, 225);
 	            for(var i=0; i < newHighScore.length; i++) {
-	                text((i + 1) + ". " + newHighScore[i], 360, 260 + i * 55);
+	                var rowY = 295 + i * 62;
+	                fill(50, 50, 90);
+	                rect(280, rowY - 25, 400, 44, 10);
+	                fill(i === 0 ? color(255, 210, 60) : color(255));
+	                textSize(28);
+	                text((i + 1) + ".  " + newHighScore[i], width/2, rowY - 3);
 	            }
+	            textAlign(LEFT, BASELINE);
 	        }
 
 	        function drawEndGameScreen() {
@@ -299,12 +316,7 @@ function updateBackgroundAudio() {
     /** Display pacman*/ 
     pacman.show();
     
-    for(var i=0; i<newHighScore.length; i++) {
-        if(newHighScore.length > i) {
-            text('HighScore:  ' + newHighScore[3], width/2 + 100, height/2 + 380);
-        }
-        
-    }
+    text('HighScore:  ' + newHighScore[0], width/2 + 100, height/2 + 380);
     
     //call scoreboard
     drawScore();
