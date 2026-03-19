@@ -303,7 +303,6 @@ function syncButtonsForScreen() {
             case END_GAME:
                 drawEndGameScreen();
                 break;
-     
         }
         function drawMainMenuScreen() {
             image(pachead,40,50);
@@ -367,6 +366,7 @@ function syncButtonsForScreen() {
 	            }
 	            textAlign(LEFT, BASELINE);
 	        }
+
 	    }
 
 
@@ -401,9 +401,10 @@ function syncButtonsForScreen() {
             }  
         }
     }
-    if(pelettes.length <=0) {
-        alert("Y O U  W I N");
-        return window.location.reload();
+    if(pelettes.length <= 0) {
+        saveScore();
+        currentScreen = HIGH_SCORE;
+        return;
     }
 
 

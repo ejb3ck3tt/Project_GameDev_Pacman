@@ -158,7 +158,7 @@ Current note:
 
 ### Medium Severity
 
-**M1. Win condition uses a blocking `alert()` instead of a proper screen transition.**
+**M1. Win condition uses a blocking `alert()` instead of a proper screen transition.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:397–399`
@@ -921,7 +921,7 @@ This keeps timing concerns cleaner and makes later complexity easier to manage.
 
 - ~~Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`~~ `Done`
 - ~~Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost~~ `Done`
-- Replace win-condition `alert()` with a proper `WIN` screen state
+- ~~Replace win-condition `alert()` with a proper `WIN` screen state~~ `Done`
 - Remove `console.log()` from ghost constructor
 - Fix `clydeImg` duplicate declaration
 - Declare `pachead` at the top of the file
