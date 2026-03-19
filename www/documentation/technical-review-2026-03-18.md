@@ -1,6 +1,7 @@
 # Pac-Man Technical Code Review
 
 Date: 2026-03-18
+Cross-check review and update: 2026-03-19
 Project: `Project_GameDev_Pacman`
 Tech stack observed in repository: JavaScript, p5.js, p5.sound, Express static server
 
@@ -12,9 +13,9 @@ However, the current implementation is not actually MVC in a strong architectura
 
 ## Implementation Status Update
 
-The findings below were written as an initial review snapshot. Since then, several runtime issues have been fixed in the codebase.
+The findings below were written as an initial review snapshot. Since then, several runtime issues have been fixed in the codebase. A second cross-check pass on 2026-03-19 identified additional issues not caught in the original review.
 
-### Fixed Since Review
+### Fixed Since Initial Review
 
 - Ghost respawn now preserves the eaten ghost reference before removal, avoiding invalid array access.
 - Game-over flow now uses an explicit end-game screen instead of continuing to mutate state in normal gameplay.
@@ -25,37 +26,88 @@ The findings below were written as an initial review snapshot. Since then, sever
 
 ### Still Open
 
-- Map/grid structure inconsistency
+- Map/grid structure inconsistency (row 24 has 8 cells, not 30)
 - Heavy global state coupling
 - MVC boundary mixing
 - Recursive ghost movement
 - Duplicate score-rendering ownership
 - Naming consistency issues
 - Performance concerns around repeated per-frame scans and frame-rate control inside entity loops
+- Ghost respawn uses a fixed hardcoded position after eating, not the original per-ghost spawn position (partially addressed)
 
 ## Review Findings
 
-### High Severity
+### Critical (found in cross-check review 2026-03-19)
 
-1. Ghost respawn logic can use an invalid or wrong ghost reference after removal. `Status: Fixed`
+**C1. `reset()` is defined in the wrong scope and will throw a ReferenceError when PLAY is clicked.**
 
 Location:
-- `www/sketch.js:435`
-- `www/sketch.js:443`
+- `www/sketch.js:514` — definition of `reset()` (inside `drawPlayScreen`)
+- `www/sketch.js:126` — call to `reset()` (inside `playButtonGame` inside `setup`)
 
 Issue:
-- The code removes `ghosts[i]` with `ghosts.splice(i,1)` and then immediately reads `ghosts[i].img` to recreate the ghost.
-- After the splice, `ghosts[i]` no longer refers to the removed ghost. If the removed ghost was the last element, `ghosts[i]` becomes `undefined`, which can break respawn logic.
+- `reset()` is declared as a nested function inside `drawPlayScreen()`, which is a global function.
+- `playButtonGame()` is a nested function inside `setup()` and is not in `drawPlayScreen()`'s scope.
+- Calling `reset()` from `playButtonGame()` throws `ReferenceError: reset is not defined` at runtime.
+- The error halts `playButtonGame()` mid-execution, so `playIntroActive = true` and `begSound.play()` on the lines after `reset()` never execute.
+- This means clicking PLAY switches `currentScreen` to `PLAY` but skips intro music and the intro screen.
 
 Impact:
-- Wrong ghost sprite may respawn.
-- Runtime errors are possible when the last ghost is eaten.
+- Silent runtime error on every PLAY button click.
+- Intro music and READY screen do not play correctly.
+- Audio cleanup from the previous session is skipped.
 
 Recommendation:
-- Store the ghost instance or its image before `splice`.
-- Prefer `const eatenGhost = ghosts[i];` before removal, then respawn using `eatenGhost.img`.
+- Move `reset()` to the top-level scope of `sketch.js` so it is accessible from both `playButtonGame` and `drawPlayScreen`.
 
-2. Game-over handling continues mutating state inside the render loop. `Status: Fixed`
+---
+
+**C2. Ghost collision inner loop runs on the wrong ghost after splice.**
+
+Location:
+- `www/sketch.js:435–466`
+
+Issue:
+- When a scared ghost is eaten, `ghosts.splice(i,1)` removes it and `ghosts.push(...)` adds the respawned ghost.
+- Execution then falls through to the inner `for(var j...)` loop at line 445, which checks `pacman.colission(ghosts[i])`.
+- After the splice, `ghosts[i]` is now the next ghost in the array (the array shifted), not the ghost that was just processed.
+- There is no `else` or `continue` between the scared-ghost branch and the life-loss branch.
+- If the shifted `ghosts[i]` happens to be near Pac-Man, it can incorrectly trigger a life loss in the same frame a ghost was eaten.
+
+Impact:
+- Eating a ghost can simultaneously remove a life in certain configurations.
+- Logic is difficult to reason about and the behavior is frame-order dependent.
+
+Recommendation:
+- Add `else` or `continue` after the scared-ghost block so the life-loss path is mutually exclusive with the ghost-eating path.
+- Avoid modifying the array while iterating over it; prefer marking entities as removed and splicing afterwards.
+
+---
+
+### High Severity
+
+**H1. Ghost respawn logic can use an invalid or wrong ghost reference after removal.** `Status: Partially Fixed`
+
+Location:
+- `www/sketch.js:438–443`
+
+Issue:
+- The code now correctly stores `var eatenGhost = ghosts[i]` before splicing, which fixes the image reference issue from the original review.
+- However, the respawn position is hardcoded: `ghosts.push(new Ghost(32*12, 32*10, eatenGhost.img))`.
+- All eaten ghosts respawn to coordinate `(384, 320)` regardless of their original spawn point defined in the field map.
+- The per-ghost spawn positions (`b`, `n`, `i`, `c` in the map) are discarded.
+
+Impact:
+- Ghost spread across the board collapses to a single origin after any ghost is eaten.
+- Each subsequent respawn is less accurate to arcade Pac-Man behavior.
+
+Recommendation:
+- Store each ghost's original spawn position when it is created.
+- Use those stored coordinates in respawn rather than a hardcoded pair.
+
+---
+
+**H2. Game-over handling continues mutating state inside the render loop.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:453`
@@ -77,7 +129,9 @@ Recommendation:
 - Stop gameplay updates once the game is over.
 - Run score persistence exactly once, not on every frame.
 
-3. Background music is started and paused every frame. `Status: Partially Fixed`
+---
+
+**H3. Background music is started and paused every frame.** `Status: Partially Fixed`
 
 Location:
 - `www/sketch.js:122`
@@ -97,11 +151,35 @@ Recommendation:
 - Only call `play()`, `pause()`, or `stop()` when the state changes.
 
 Current note:
-- The implementation now restores the Pac-Man intro theme on entering `PLAY` and pauses gameplay until the theme finishes, but the broader audio model is still centralized in `sketch.js` rather than a dedicated audio/state system.
+- The implementation now restores the Pac-Man intro theme on entering `PLAY` and pauses gameplay until the theme finishes, but the broader audio model is still centralized in `sketch.js` rather than a dedicated audio or state system.
+- The `reset()` scoping bug (C1) means intro playback may not trigger correctly in practice.
+
+---
 
 ### Medium Severity
 
-4. The map definition is structurally inconsistent with the declared grid dimensions.
+**M1. Win condition uses a blocking `alert()` instead of a proper screen transition.**
+
+Location:
+- `www/sketch.js:397–399`
+
+Issue:
+- When all pellets are consumed, the game calls `alert("Y O U  W I N")` followed by `window.location.reload()`.
+- This blocks the browser thread.
+- The win path has no score display, no high-score update, no transition screen, and no return to the menu.
+- The game-over screen handles all of those correctly; the win condition does not.
+
+Impact:
+- Inconsistent player experience between winning and losing.
+- Winning is treated as a worse outcome than losing from a UX perspective.
+
+Recommendation:
+- Introduce a `WIN` screen state equivalent to `END_GAME`.
+- Call `saveScore()` and transition to the win screen the same way game-over does.
+
+---
+
+**M2. The map definition is structurally inconsistent with the declared grid dimensions.**
 
 Location:
 - `www/field.js:4`
@@ -110,7 +188,7 @@ Location:
 - `www/sketch.js:152`
 
 Issue:
-- `rows` is declared as `25` and `column` as `30`, but the last row only contains 8 cells.
+- `rows` is declared as `25` and `column` as `30`, but the last row (index 24) only contains 8 cells.
 - The setup loop assumes a rectangular matrix and iterates `j < field.column` for every row.
 
 Impact:
@@ -121,7 +199,9 @@ Recommendation:
 - Use a rectangular map for all rows, or split HUD data from the gameplay grid.
 - Add a map validator to assert row widths and allowed tile symbols.
 
-5. Architecture is heavily global and tightly coupled.
+---
+
+**M3. Architecture is heavily global and tightly coupled.**
 
 Location:
 - `www/sketch.js:6`
@@ -142,7 +222,9 @@ Recommendation:
 - Introduce a `Game` or `GameState` object that owns the full runtime state.
 - Pass dependencies into modules instead of reading globals directly.
 
-6. The project claims MVC style, but rendering and model logic are mixed together.
+---
+
+**M4. The project claims MVC style, but rendering and model logic are mixed together.**
 
 Location:
 - `www/sketch.js:276`
@@ -164,7 +246,9 @@ Recommendation:
   - View/Renderer: drawing entities and UI
   - Controller/Input: keyboard and menu actions
 
-7. The end-game button handler is misused. `Status: Fixed`
+---
+
+**M5. The end-game button handler is misused.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:145`
@@ -179,7 +263,9 @@ Impact:
 Recommendation:
 - Use `playButton4.mouseClicked(() => window.location.reload());`
 
-8. Ghost movement can recurse unpredictably.
+---
+
+**M6. Ghost movement can recurse unpredictably.**
 
 Location:
 - `www/ghost.js:24`
@@ -194,24 +280,143 @@ Impact:
 Recommendation:
 - Replace recursion with bounded iterative retry logic or a path-selection strategy.
 
+---
+
+**M7. Fruit display logic is nested inside the ghost loop.**
+
+Location:
+- `www/sketch.js:411–422`
+
+Issue:
+- Fruit `show()` and `eatFruit()` checks are inside `for(var i=0; i < ghosts.length; i++)`.
+- With N ghosts all scared, the fruit renders N times per frame and the eat-check runs N times per fruit.
+- `fruits.splice(h, 1)` inside the outer ghost loop creates array index drift.
+
+Impact:
+- Redundant rendering and potential double-remove bugs when multiple ghosts are scared simultaneously.
+
+Recommendation:
+- Move fruit display and collection to its own loop, separate from ghost iteration.
+
+---
+
 ### Low Severity
 
-9. Duplicate or conflicting definitions reduce clarity.
+**L1. `reset()` scoping also causes the `ghostScared()` and `chasePacman()` helpers to be inaccessible.**
+
+Location:
+- `www/sketch.js:479`
+- `www/sketch.js:484`
+
+Issue:
+- `ghostScared()` and `chasePacman()` are also nested inside `drawPlayScreen()`.
+- They are currently only called within `drawPlayScreen()`, so they work.
+- If ghost-scare behavior ever needs to be triggered from another handler (such as a timer or a menu action), these helpers will not be accessible.
+
+Recommendation:
+- Extract these helpers to module scope.
+
+---
+
+**L2. `clydeImg` is declared twice in the same statement.**
+
+Location:
+- `www/sketch.js:13`
+
+Issue:
+- `var clydeImg, pinkyImg, inkyImg, clydeImg;` — `clydeImg` appears twice.
+- Harmless at runtime with `var` semantics, but a clear typo and a linting error.
+
+Recommendation:
+- Fix the declaration to: `var blinkyImg, pinkyImg, inkyImg, clydeImg;`
+
+---
+
+**L3. `pachead` is used without being declared.**
+
+Location:
+- `www/sketch.js:59`
+
+Issue:
+- `pachead = loadImage('./images/pacmanhead.png');` assigns to `pachead` without a preceding `var`, `let`, or `const`.
+- This creates an implicit global in sloppy mode and would throw a `ReferenceError` in strict mode.
+
+Recommendation:
+- Add `var pachead;` alongside the other image variable declarations at the top of the file.
+
+---
+
+**L4. `activeGhosts` array is declared and never used.**
+
+Location:
+- `www/sketch.js:33`
+
+Issue:
+- `var activeGhosts = [];` is initialized but never populated or read.
+
+Recommendation:
+- Remove the dead variable, or use it to replace the `ghosts` array with a cleaner active/inactive model.
+
+---
+
+**L5. `effects.js` is entirely dead code.**
+
+Location:
+- `www/effects.js`
+
+Issue:
+- `playSound()` and `stopSound()` are never called from anywhere in the codebase.
+- All audio management is handled directly in `sketch.js`.
+
+Recommendation:
+- Either remove `effects.js` or consolidate all audio helpers into it and call them from `sketch.js`.
+
+---
+
+**L6. `soundFormats('mp3', 'ogg')` declares an unavailable format.**
+
+Location:
+- `www/sketch.js:51`
+
+Issue:
+- `soundFormats('mp3', 'ogg')` is declared but the `sounds/` folder contains only `.mp3` and `.wav` files. No `.ogg` files exist.
+
+Recommendation:
+- Change to `soundFormats('mp3', 'wav')` to match actual assets, or add `.ogg` versions.
+
+---
+
+**L7. `Level` class uses `fruitImg` — no dedicated level sprite.**
+
+Location:
+- `www/level.js:20`
+
+Issue:
+- `image(fruitImg, this.vX, this.vY)` — the `Level` indicator renders the grape image instead of a distinct level sprite.
+- The class is structurally present but semantically a placeholder.
+
+Recommendation:
+- Add a level-specific sprite or remove the class if level progression is not implemented.
+
+---
+
+**L8. Duplicate or conflicting definitions reduce clarity.**
 
 Location:
 - `www/sketch.js:325`
 - `www/field.js:88`
 
 Issue:
-- `drawHighScore()` is defined in both `sketch.js` and `field.js`.
-
-Impact:
-- This makes ownership unclear and increases the chance of accidental overrides.
+- `drawHighScore()` is defined in both `sketch.js` (inside `draw()`) and `field.js`.
+- The `field.js` version displays the current `score` variable (not high score), uses incorrect label text, and is never called.
 
 Recommendation:
-- Keep one score-rendering module and one source of truth for score UI functions.
+- Remove the `drawHighScore()` definition from `field.js`.
+- Keep score display in `field.js` through `drawScore()` only.
 
-10. Naming consistency and typo issues make the codebase harder to maintain.
+---
+
+**L9. Naming consistency and typo issues make the codebase harder to maintain.**
 
 Examples:
 - `Pelette` should likely be `Pellet`
@@ -224,6 +429,48 @@ Impact:
 Recommendation:
 - Standardize names and keep class/function naming aligned with domain concepts.
 
+---
+
+**L10. `index.html` page title is "Test".**
+
+Location:
+- `www/index.html:5`
+
+Issue:
+- `<title>Test</title>` — the page title is a development placeholder.
+
+Recommendation:
+- Change to `<title>Pac-Man</title>` or equivalent.
+
+---
+
+**L11. `package.json` contains placeholder values.**
+
+Location:
+- `package.json`
+
+Issue:
+- `"name": "test"`, `"description": ""`, `"author": ""` are all placeholder values from the initial `npm init`.
+
+Recommendation:
+- Update to reflect the actual project name, description, and author.
+
+---
+
+**L12. `console.log()` left in ghost constructor.**
+
+Location:
+- `www/ghost.js:5`
+
+Issue:
+- `console.log(this.gX, this.gY);` logs every ghost's position each time a ghost is constructed or respawned.
+- With 4 ghosts and repeated respawns, this produces continuous console noise.
+
+Recommendation:
+- Remove all debug `console.log()` calls before considering the code release-ready.
+
+---
+
 ## Architecture Quality
 
 ### What is good
@@ -233,6 +480,8 @@ Recommendation:
 - The game loop is centralized through p5.js `draw()`, which internally uses `requestAnimationFrame`.
 - The level grid gives the project a deterministic map-driven structure.
 - Asset handling is centralized in `preload()`, which is the correct p5 pattern.
+- High scores are persisted with `localStorage` using try/catch guards.
+- The `saveScore()` guard (`gameOverSaved`) prevents duplicate score writes per session.
 
 ### What is weak
 
@@ -240,12 +489,15 @@ Recommendation:
 - `sketch.js` acts as bootstrapper, screen manager, world builder, renderer, audio manager, collision system, score manager, and game-over flow controller.
 - There is no explicit domain model for game state transitions.
 - There is no persistence layer, service layer, or reusable scene abstraction.
+- Nested helper functions (`reset`, `saveScore`, `ghostScared`) inside render functions cause scoping bugs.
 
 ### Overall assessment
 
 - Prototype quality: solid
 - Architecture quality for maintainability: moderate to weak
 - Architecture quality for extension into a multi-level polished game: weak without refactor
+
+---
 
 ## Folder Structure Explanation
 
@@ -274,28 +526,30 @@ Project_GameDev_Pacman/
 
 ### Root level
 
-- `package.json`: Node package metadata and dependencies.
+- `package.json`: Node package metadata and dependencies. Currently contains placeholder name, description, and author.
 - `package-lock.json`: locked dependency tree.
 - `server.js`: Express server that serves the static `www/` directory.
 - `README.md`: project overview and run instructions.
 
 ### Web app level
 
-- `www/index.html`: browser entry point; loads p5.js and all game scripts.
+- `www/index.html`: browser entry point; loads p5.js and all game scripts. Page title is currently "Test" (placeholder).
 - `www/sketch.js`: main application entry, asset loading, scene switching, world setup, draw loop, collision handling, score flow.
 - `www/field.js`: map data and tile-like classes.
 - `www/pacman.js`: Pac-Man entity behavior.
 - `www/ghost.js`: ghost entity behavior.
 - `www/control.js`: keyboard input.
 - `www/level.js`: fruit and level icon classes.
-- `www/effects.js`: sound helper functions.
+- `www/effects.js`: sound helper functions (currently dead code — not called anywhere).
 
 ### Assets
 
 - `www/images/`: sprites and icons.
-- `www/sounds/`: audio assets.
+- `www/sounds/`: audio assets (`.mp3` and `.wav`; no `.ogg` despite `soundFormats` declaration).
 - `www/lib/`: third-party p5 libraries vendored into the project.
 - `www/documentation/`: original project documentation PDF and this review.
+
+---
 
 ## Possible Design Improvements
 
@@ -331,6 +585,7 @@ Recommended scenes:
 - `PlayScene`
 - `HighScoreScene`
 - `GameOverScene`
+- `WinScene`
 
 Each scene should have:
 - `enter()`
@@ -375,19 +630,21 @@ Start with:
 
 Then assign a strategy to each ghost.
 
+---
+
 ## Missing Components
 
 The current project is missing several components that would be expected in a production-quality or scalable game project.
 
 ### Gameplay and domain
 
-- Persistent high score storage `Status: Fixed via local browser storage`
 - Level progression system
 - Pause/resume system
-- Restart without full page reload
-- Proper ghost frightened timer and recovery logic
-- Victory screen state
-- Deterministic respawn and spawn management
+- Restart without full page reload (currently requires `window.location.reload()`)
+- Proper ghost frightened timer and recovery logic (`chasePacman()` is defined but never called)
+- Proper win screen state (currently uses `alert()`)
+- Deterministic respawn and spawn management per ghost
+- Mobile/touch input support
 
 ### Architecture and engineering
 
@@ -407,6 +664,8 @@ The current project is missing several components that would be expected in a pr
 - Map/tile legend specification
 - Event/state transition documentation
 - Dependency/version support policy
+
+---
 
 ## Security Risks
 
@@ -449,13 +708,15 @@ Location:
 - `www/sketch.js:490`
 
 Observation:
-- Scores live entirely in browser memory and are trivially editable.
+- Scores live entirely in browser memory and `localStorage`, which are trivially editable.
 
 Risk:
 - Any future leaderboard would be easy to tamper with unless validated server-side.
 
 Recommendation:
 - Treat all browser score data as untrusted if persistence is added later.
+
+---
 
 ## Performance Concerns
 
@@ -517,6 +778,19 @@ Impact:
 Recommendation:
 - Use bounded retry logic.
 
+### 5. Fruit render runs N times per ghost per frame
+
+Location:
+- `www/sketch.js:411–422`
+
+Impact:
+- Fruit is shown and collision-checked once per ghost, not once per fruit.
+
+Recommendation:
+- Move fruit iteration to a dedicated loop.
+
+---
+
 ## Scalability Issues
 
 The current structure will struggle as soon as the project adds:
@@ -534,6 +808,7 @@ The current structure will struggle as soon as the project adds:
 - There is no module boundary enforcement.
 - The map format is not validated.
 - Game state transitions are implicit rather than modeled.
+- Nested helper functions tied to render-scope create inaccessible APIs.
 
 ### Recommended scalable target structure
 
@@ -547,6 +822,7 @@ src/
 ├── scenes/
 │   ├── mainMenuScene.js
 │   ├── playScene.js
+│   ├── winScene.js
 │   ├── highScoreScene.js
 │   └── gameOverScene.js
 ├── entities/
@@ -571,6 +847,8 @@ src/
     └── keyboardController.js
 ```
 
+---
+
 ## Code Organization Best Practices
 
 ### Module boundaries
@@ -578,6 +856,7 @@ src/
 - Keep one primary responsibility per file.
 - Avoid sharing mutable globals across files.
 - Export/import explicit interfaces if moving to ES modules.
+- Do not define functions inside render functions if they need to be called from outside.
 
 ### Naming
 
@@ -601,9 +880,9 @@ src/
 - Unit test movement rules, collision logic, score updates, and map parsing.
 - Add at least smoke tests for scene transitions.
 
-## Game Loop Assessment
+---
 
-The user request referenced `requestAnimationFram`, which appears to mean `requestAnimationFrame`.
+## Game Loop Assessment
 
 ### Current behavior
 
@@ -620,6 +899,7 @@ The user request referenced `requestAnimationFram`, which appears to mean `reque
 - Avoid mutating frame-rate behavior inside game logic.
 - Split `update()` and `render()` responsibilities conceptually even if p5 drives both.
 - Use explicit delta time if movement speed should become frame-independent.
+- Do not define side-effect helpers inside the render function.
 
 ### Better loop model
 
@@ -633,15 +913,24 @@ function draw() {
 
 This keeps timing concerns cleaner and makes later complexity easier to manage.
 
+---
+
 ## Suggested Refactor Roadmap
 
-### Phase 1: Stabilize
+### Phase 1: Stabilize (immediate fixes)
 
-- Fix ghost respawn bug
-- Introduce `GAME_OVER` and `WIN` states
-- Stop repeated score mutation after death
-- Move audio control out of `draw()`
-- Fix callback misuse for the end-game button
+- Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`
+- Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost
+- Replace win-condition `alert()` with a proper `WIN` screen state
+- Remove `console.log()` from ghost constructor
+- Fix `clydeImg` duplicate declaration
+- Declare `pachead` at the top of the file
+- Remove dead `activeGhosts` variable
+- Fix `soundFormats` to match actual assets
+- Rename `effects.js` functions or delete if not used
+- Fix `drawHighScore()` duplicate in `field.js`
+- Fix `index.html` title
+- Update `package.json` placeholders
 
 ### Phase 2: Restructure
 
@@ -649,22 +938,30 @@ This keeps timing concerns cleaner and makes later complexity easier to manage.
 - Move scene logic out of `sketch.js`
 - Extract constants and map metadata
 - Separate update logic from rendering
+- Move all ghost helpers to module scope
 
 ### Phase 3: Scale
 
 - Add level loader and level progression
-- Add persistent local high scores
+- Add proper ghost AI per-ghost (scatter, chase, frightened, respawn)
+- Add pause/resume system
 - Add tests and linting
 - Consider ES modules or a small bundler workflow
+
+---
 
 ## Final Assessment
 
 This is a good prototype and a credible student game project, but it is not yet a strong MVC implementation. The biggest architectural issue is not lack of functionality, but lack of boundaries: game state, UI, rendering, input, audio, and progression are all intertwined. That makes the project fragile under change.
 
-If the goal is learning and demonstrating software engineering principles, the next most valuable step is not adding more gameplay features first. It is extracting a clean state model, scene system, and rendering boundary so the code can support those features safely.
+The cross-check review (2026-03-19) found additional runtime bugs that were not caught in the original pass, most critically that `reset()` is defined in the wrong scope and will throw a silent error on every PLAY button click, and that the ghost collision loop has a structural logic error after eating a scared ghost.
+
+If the goal is learning and demonstrating software engineering principles, the next most valuable step is not adding more gameplay features first. It is fixing the scope bugs, extracting a clean state model, adding a win screen, and establishing a rendering boundary so the code can support those features safely.
+
+---
 
 ## Notes About Existing Documentation
 
 - The repository includes an original project PDF at `www/documentation/Milestone2_Ebeckett_s5125717.pdf`.
-- I was able to confirm the file exists, but I could not cleanly extract readable text from it with the tools available in this environment.
-- This review therefore uses the repository code, README, and observed runtime structure as the primary source of truth.
+- This review uses the repository code, README, and observed runtime structure as the primary source of truth.
+- A second cross-check review was performed on 2026-03-19 against all source files to verify claims made in the original review and add newly identified issues.
