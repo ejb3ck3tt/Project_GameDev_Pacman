@@ -449,28 +449,28 @@ function syncButtonsForScreen() {
                 ghosts.splice(i,1);
                 score = score + 200;
                 ghosts.push(new Ghost(32*12,32*10, eatenGhost.img));
-            }
-        for(var j=0; j < lives.length; j++) {
-            if(pacman.colission(ghosts[i])) {
-                deathSound.play();
-                lives.splice(j,1);
-                pacman.respawn();
-                for(var k=0; k < ghosts.length; k++) {
-                    ghosts[k].ghostRespawn();
+            } else {
+                for(var j=0; j < lives.length; j++) {
+                    if(pacman.colission(ghosts[i])) {
+                        deathSound.play();
+                        lives.splice(j,1);
+                        pacman.respawn();
+                        for(var k=0; k < ghosts.length; k++) {
+                            ghosts[k].ghostRespawn();
+                        }
+                        if(lives.length < 1) {
+                            currentScreen = END_GAME;
+                            playButton1.show();
+                            playButton1.position(400, height - 70);
+                            playButton2.hide();
+                            playButton3.hide();
+                            playButton4.hide();
+                            saveScore();
+                            return;
+                        }
+                    }
                 }
-                if(lives.length < 1) {
-                    currentScreen = END_GAME;
-                    playButton1.show();
-                    playButton1.position(400, height - 70);
-                    playButton2.hide();
-                    playButton3.hide();
-                    playButton4.hide();
-                    saveScore();
-                    return;
-                }
             }
-        }        
-            
         }
     }
 

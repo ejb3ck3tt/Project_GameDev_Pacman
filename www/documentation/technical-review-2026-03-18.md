@@ -62,7 +62,7 @@ Recommendation:
 
 ---
 
-**C2. Ghost collision inner loop runs on the wrong ghost after splice.**
+**C2. Ghost collision inner loop runs on the wrong ghost after splice.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:435–466`
@@ -920,7 +920,7 @@ This keeps timing concerns cleaner and makes later complexity easier to manage.
 ### Phase 1: Stabilize (immediate fixes)
 
 - ~~Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`~~ `Done`
-- Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost
+- ~~Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost~~ `Done`
 - Replace win-condition `alert()` with a proper `WIN` screen state
 - Remove `console.log()` from ghost constructor
 - Fix `clydeImg` duplicate declaration
