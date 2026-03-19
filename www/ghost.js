@@ -2,7 +2,8 @@
 function Ghost(x,y,img,theField) {
     this.gX = x;
     this.gY = y;
-    console.log(this.gX,this.gY);
+    this.spawnX = x;
+    this.spawnY = y;
     this.img = img;
     this.frame = 0;
     this.direction = 0;

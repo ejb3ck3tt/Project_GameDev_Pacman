@@ -74,12 +74,10 @@ From a software engineering perspective, the project demonstrates object-oriente
 ### Partially implemented features
 
 - Ghost frightened timer: ghosts enter frightened mode on energizer collection but there is no automatic recovery timer. `chasePacman()` is defined in the code but never called. Ghosts remain frightened until eaten or the session ends.
-- Ghost respawn: eaten ghosts respawn to a fixed position `(384, 320)` rather than their original individual spawn points.
 - Level icons: a `Level` class exists but uses the fruit sprite and has no functional level progression logic.
 
 ### Known missing features
 
-- Win screen: when all pellets are collected, the game shows a browser `alert()` dialog and reloads the page. There is no win screen comparable to the game-over screen.
 - Pause/resume
 - Level progression beyond one map
 - Mobile or touch input
@@ -87,19 +85,29 @@ From a software engineering perspective, the project demonstrates object-oriente
 
 ---
 
+## Recent Fixes (2026-03-19)
+
+The following bugs were identified in a cross-check review and fixed in code:
+
+| Issue | What Was Fixed |
+|-------|----------------|
+| `reset()` scope bug | Moved from inside `drawPlayScreen()` to module scope — PLAY button now correctly triggers the intro music and READY screen |
+| Ghost collision after splice | Added `else` branch so eating a scared ghost and losing a life are mutually exclusive — no more false life loss when eating a ghost |
+| Win condition `alert()` | Replaced with `saveScore()` + transition to High Score screen — winning now updates scores and navigates correctly |
+| Ghost respawn position | Added `spawnX`/`spawnY` to `Ghost` constructor — each ghost returns to its own map spawn point after being eaten, not a shared hardcoded coordinate |
+| `console.log()` in ghost constructor | Removed — no more continuous console output on ghost creation and respawn |
+
 ## Known Limitations
 
-The following issues are present in the current code and are documented in detail in the technical review:
+The following issues remain in the current code and are documented in detail in the technical review:
 
-- **Scope bug in PLAY button:** `reset()` is defined inside `drawPlayScreen()` but called from `playButtonGame()` in `setup()`. This will throw a silent `ReferenceError` when PLAY is clicked, causing the intro music and READY screen to not play correctly.
-- **Ghost collision logic after splice:** when a scared ghost is eaten, the inner life-loss loop runs on the wrong ghost (the array shifted after splice). An `else` or `continue` is missing.
-- **Win condition is a blocking `alert()`:** winning the game triggers a browser `alert()` rather than a proper screen transition.
-- **`console.log()` in ghost constructor:** every ghost creation logs coordinates to the browser console.
 - **`effects.js` is dead code:** `playSound()` and `stopSound()` in `effects.js` are never called.
-- **`clydeImg` declared twice:** minor typo in the variable declaration at line 13 of `sketch.js`.
+- **`clydeImg` declared twice:** minor typo in the variable declaration in `sketch.js`.
 - **`pachead` is an undeclared implicit global:** the main menu image is loaded without a `var` declaration.
 - **`activeGhosts` array is unused:** declared but never populated or read.
-- **`index.html` title is "Test":** a placeholder from development.
+- **Ghost frightened mode has no timer:** ghosts stay frightened indefinitely once an energizer is eaten. `chasePacman()` is defined but never called.
+- **Fruit display runs inside ghost loop:** shown and collision-checked once per ghost per frame rather than once per fruit.
+- **`soundFormats` declares `.ogg`:** no `.ogg` files exist in the sounds folder.
 
 ---
 

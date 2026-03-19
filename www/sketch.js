@@ -449,7 +449,7 @@ function syncButtonsForScreen() {
                 eatGhostSound.play();
                 ghosts.splice(i,1);
                 score = score + 200;
-                ghosts.push(new Ghost(32*12,32*10, eatenGhost.img));
+                ghosts.push(new Ghost(eatenGhost.spawnX, eatenGhost.spawnY, eatenGhost.img));
             } else {
                 for(var j=0; j < lives.length; j++) {
                     if(pacman.colission(ghosts[i])) {

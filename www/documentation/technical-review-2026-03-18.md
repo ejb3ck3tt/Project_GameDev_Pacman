@@ -13,9 +13,9 @@ However, the current implementation is not actually MVC in a strong architectura
 
 ## Implementation Status Update
 
-The findings below were written as an initial review snapshot. Since then, several runtime issues have been fixed in the codebase. A second cross-check pass on 2026-03-19 identified additional issues not caught in the original review.
+The findings below were written as an initial review snapshot. Since then, several runtime issues have been fixed in the codebase. A second cross-check pass on 2026-03-19 identified additional issues not caught in the original review, and a further coding session fixed the highest-priority items.
 
-### Fixed Since Initial Review
+### Fixed Since Initial Review (pre-session)
 
 - Ghost respawn now preserves the eaten ghost reference before removal, avoiding invalid array access.
 - Game-over flow now uses an explicit end-game screen instead of continuing to mutate state in normal gameplay.
@@ -24,16 +24,34 @@ The findings below were written as an initial review snapshot. Since then, sever
 - High-score and game-over screen UI have been improved for readability.
 - Audio handling has been partially improved so the Pac-Man intro theme plays on entering the play state instead of behaving like generic looping menu audio.
 
+### Fixed in 2026-03-19 Coding Session
+
+| # | Issue | File(s) Changed | What Was Done |
+|---|-------|-----------------|---------------|
+| C1 | `reset()` defined in wrong scope — `ReferenceError` on PLAY button click | `sketch.js` | Moved `reset()` from inside `drawPlayScreen()` to module scope so it is accessible from both `playButtonGame()` and `saveScore()` |
+| C2 | Ghost collision inner loop ran on wrong ghost after splice | `sketch.js` | Added `else` branch before the life-loss loop so eating a scared ghost and losing a life are mutually exclusive outcomes |
+| M1 | Win condition used blocking `alert()` and `window.location.reload()` | `sketch.js` | Replaced with `saveScore()` + `currentScreen = HIGH_SCORE` — winning now updates the high-score list and routes to the High Score screen |
+| H1 | Eaten ghosts always respawned to hardcoded position `(384, 320)` | `ghost.js`, `sketch.js` | Added `spawnX` and `spawnY` properties to the `Ghost` constructor; replacement ghost on eat now uses `eatenGhost.spawnX, eatenGhost.spawnY` |
+| L12 | `console.log()` left in `Ghost` constructor, firing on every construction and respawn | `ghost.js` | Removed debug `console.log()` |
+
 ### Still Open
 
 - Map/grid structure inconsistency (row 24 has 8 cells, not 30)
 - Heavy global state coupling
 - MVC boundary mixing
-- Recursive ghost movement
-- Duplicate score-rendering ownership
-- Naming consistency issues
-- Performance concerns around repeated per-frame scans and frame-rate control inside entity loops
-- Ghost respawn uses a fixed hardcoded position after eating, not the original per-ghost spawn position (partially addressed)
+- Recursive ghost movement (`ghost.js`)
+- Duplicate `drawHighScore()` definition in `field.js` (dead code)
+- Naming consistency: `Pelette`, `colission`, `Fields`
+- `clydeImg` declared twice in `sketch.js`
+- `pachead` undeclared implicit global in `sketch.js`
+- `activeGhosts` unused variable in `sketch.js`
+- `effects.js` entirely dead code
+- `soundFormats('mp3', 'ogg')` — no `.ogg` assets exist
+- Ghost frightened mode has no recovery timer (`chasePacman()` defined but never called)
+- Fruit display and collision check runs inside the ghost loop (N times per ghost per frame)
+- `frameRate(8)` called inside ghost loop every frame
+- `index.html` title is "Test"
+- `package.json` contains placeholder name, description, and author
 
 ## Review Findings
 
@@ -86,24 +104,21 @@ Recommendation:
 
 ### High Severity
 
-**H1. Ghost respawn logic can use an invalid or wrong ghost reference after removal.** `Status: Partially Fixed`
+**H1. Ghost respawn logic can use an invalid or wrong ghost reference after removal.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:438–443`
+- `www/ghost.js:3–5`
 
 Issue:
 - The code now correctly stores `var eatenGhost = ghosts[i]` before splicing, which fixes the image reference issue from the original review.
-- However, the respawn position is hardcoded: `ghosts.push(new Ghost(32*12, 32*10, eatenGhost.img))`.
-- All eaten ghosts respawn to coordinate `(384, 320)` regardless of their original spawn point defined in the field map.
-- The per-ghost spawn positions (`b`, `n`, `i`, `c` in the map) are discarded.
+- However, the respawn position was hardcoded: `ghosts.push(new Ghost(32*12, 32*10, eatenGhost.img))`.
+- All eaten ghosts respawned to coordinate `(384, 320)` regardless of their original spawn point defined in the field map.
 
-Impact:
-- Ghost spread across the board collapses to a single origin after any ghost is eaten.
-- Each subsequent respawn is less accurate to arcade Pac-Man behavior.
-
-Recommendation:
-- Store each ghost's original spawn position when it is created.
-- Use those stored coordinates in respawn rather than a hardcoded pair.
+Fix applied:
+- Added `this.spawnX = x; this.spawnY = y;` to the `Ghost` constructor in `ghost.js`.
+- Changed the replacement ghost creation in `sketch.js` to `new Ghost(eatenGhost.spawnX, eatenGhost.spawnY, eatenGhost.img)`.
+- Each ghost now returns to its own map spawn point after being eaten.
 
 ---
 
@@ -164,18 +179,13 @@ Location:
 - `www/sketch.js:397–399`
 
 Issue:
-- When all pellets are consumed, the game calls `alert("Y O U  W I N")` followed by `window.location.reload()`.
-- This blocks the browser thread.
-- The win path has no score display, no high-score update, no transition screen, and no return to the menu.
-- The game-over screen handles all of those correctly; the win condition does not.
+- When all pellets are consumed, the game called `alert("Y O U  W I N")` followed by `window.location.reload()`.
+- This blocked the browser thread with no score display, no high-score update, and no menu navigation.
 
-Impact:
-- Inconsistent player experience between winning and losing.
-- Winning is treated as a worse outcome than losing from a UX perspective.
-
-Recommendation:
-- Introduce a `WIN` screen state equivalent to `END_GAME`.
-- Call `saveScore()` and transition to the win screen the same way game-over does.
+Fix applied:
+- Replaced with `saveScore(); currentScreen = HIGH_SCORE; return;`
+- Winning now updates the high-score list (same path as game over) and routes the player to the High Score screen.
+- The MAIN MENU button on the High Score screen provides navigation back.
 
 ---
 
@@ -431,43 +441,41 @@ Recommendation:
 
 ---
 
-**L10. `index.html` page title is "Test".**
+**L10. `index.html` page title is "Test".** `Status: Fixed`
 
 Location:
 - `www/index.html:5`
 
-Issue:
-- `<title>Test</title>` — the page title is a development placeholder.
-
-Recommendation:
-- Change to `<title>Pac-Man</title>` or equivalent.
+Fix applied:
+- Changed to `<title>Ethel's Pac-Man</title>`
 
 ---
 
-**L11. `package.json` contains placeholder values.**
+**L11. `package.json` contains placeholder values.** `Status: Fixed`
 
 Location:
 - `package.json`
 
-Issue:
-- `"name": "test"`, `"description": ""`, `"author": ""` are all placeholder values from the initial `npm init`.
-
-Recommendation:
-- Update to reflect the actual project name, description, and author.
+Fix applied:
+- `name` → `ethels-pacman`
+- `description` → `Browser-based Pac-Man game built with p5.js`
+- `author` → `Ethel Beckett`
+- `license` → `MIT`
+- `main` → `server.js`
+- `scripts.start` → `node server.js`
 
 ---
 
-**L12. `console.log()` left in ghost constructor.**
+**L12. `console.log()` left in ghost constructor.** `Status: Fixed`
 
 Location:
 - `www/ghost.js:5`
 
 Issue:
-- `console.log(this.gX, this.gY);` logs every ghost's position each time a ghost is constructed or respawned.
-- With 4 ghosts and repeated respawns, this produces continuous console noise.
+- `console.log(this.gX, this.gY);` logged every ghost's position each time a ghost was constructed or respawned.
 
-Recommendation:
-- Remove all debug `console.log()` calls before considering the code release-ready.
+Fix applied:
+- Removed the `console.log()` call when fixing H1 (ghost respawn).
 
 ---
 
@@ -822,7 +830,6 @@ src/
 ├── scenes/
 │   ├── mainMenuScene.js
 │   ├── playScene.js
-│   ├── winScene.js
 │   ├── highScoreScene.js
 │   └── gameOverScene.js
 ├── entities/
@@ -921,16 +928,17 @@ This keeps timing concerns cleaner and makes later complexity easier to manage.
 
 - ~~Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`~~ `Done`
 - ~~Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost~~ `Done`
-- ~~Replace win-condition `alert()` with a proper `WIN` screen state~~ `Done`
-- Remove `console.log()` from ghost constructor
+- ~~Replace win-condition `alert()` with proper screen transition — routes to High Score screen~~ `Done`
+- ~~Store and use per-ghost spawn coordinates on eat/respawn~~ `Done`
+- ~~Remove `console.log()` from ghost constructor~~ `Done`
 - Fix `clydeImg` duplicate declaration
 - Declare `pachead` at the top of the file
 - Remove dead `activeGhosts` variable
 - Fix `soundFormats` to match actual assets
 - Rename `effects.js` functions or delete if not used
 - Fix `drawHighScore()` duplicate in `field.js`
-- Fix `index.html` title
-- Update `package.json` placeholders
+- ~~Fix `index.html` title~~ `Done`
+- ~~Update `package.json` placeholders~~ `Done`
 
 ### Phase 2: Restructure
 
