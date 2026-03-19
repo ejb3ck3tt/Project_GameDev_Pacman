@@ -39,7 +39,7 @@ The findings below were written as an initial review snapshot. Since then, sever
 
 ### Critical (found in cross-check review 2026-03-19)
 
-**C1. `reset()` is defined in the wrong scope and will throw a ReferenceError when PLAY is clicked.**
+**C1. `reset()` is defined in the wrong scope and will throw a ReferenceError when PLAY is clicked.** `Status: Fixed`
 
 Location:
 - `www/sketch.js:514` — definition of `reset()` (inside `drawPlayScreen`)
@@ -919,7 +919,7 @@ This keeps timing concerns cleaner and makes later complexity easier to manage.
 
 ### Phase 1: Stabilize (immediate fixes)
 
-- Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`
+- ~~Move `reset()` to module scope so it is callable from `playButtonGame` and `saveScore`~~ `Done`
 - Fix ghost collision inner loop: add `else` or `continue` after eating a scared ghost
 - Replace win-condition `alert()` with a proper `WIN` screen state
 - Remove `console.log()` from ghost constructor

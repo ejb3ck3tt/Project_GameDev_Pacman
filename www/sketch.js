@@ -241,6 +241,14 @@ function updateBackgroundAudio() {
     }
 }
 
+function reset() {
+    begSound.stop();
+    chompSound.stop();
+    deathSound.stop();
+    lastAudioScreen = null;
+    playIntroActive = false;
+}
+
 function syncButtonsForScreen() {
     if(currentScreen === PLAY) {
         playButton1.hide();
@@ -511,12 +519,5 @@ function syncButtonsForScreen() {
         reset();
     }
 
-    function reset() {
-        begSound.stop();
-        chompSound.stop();
-        deathSound.stop();
-        lastAudioScreen = null;
-        playIntroActive = false;
-    }
 
 }
